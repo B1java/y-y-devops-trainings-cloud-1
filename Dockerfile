@@ -1,28 +1,25 @@
-# Building the binary of the App
-FROM golang:1.21 AS build
+FROM golang:1.21 as builder
 
-WORKDIR /go/src
-# Copy go.mod and go.sum
-COPY go.* ./
+# Устанавливаем рабочую директорию
+WORKDIR /catgpt
 
-# Downloads all the dependencies in advance (could be left out, but it's more clear this way)
+# Копируем файл go.mod и go.sum и скачиваем зависимости
+COPY /catgpt/go.mod /catgpt/go.sum ./
 RUN go mod download
 
-# Copy all the Code and stuff to compile everything
-COPY . .
+# Копируем исходный код приложения
+COPY /catgpt /catgpt
 
-# Builds the application as a staticly linked one, to allow it to run on alpine
-# RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -a -installsuffix cgo -o app .
-RUN CGO_ENABLED=0 go build -o catgpt
+EXPOSE 8080 9090
 
-# Moving the binary to the 'final Image' to make it smaller
-FROM gcr.io/distroless/static-debian12:latest-amd64 as prod
+# Собираем приложение с CGO_DISABLED
+RUN CGO_ENABLED=0 go build -o main.go
 
-WORKDIR /app
+# Используем второй базовый образ для рантайма
+FROM gcr.io/distroless/static-debian12:latest-amd64
 
-COPY --from=build /go/src/catgpt /app/catgpt
+# Копируем бинарный файл из предыдущего образа
+COPY --from=builder /catgpt /
 
-# Exposes port 8080 because our program listens on that port
-EXPOSE 8080
-
-ENTRYPOINT ["/app/catgpt"]
+# Указываем команду для запуска приложения
+CMD ["./main.go"]
